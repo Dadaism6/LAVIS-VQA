@@ -368,20 +368,28 @@ class Blip2VicunaInstruct(Blip2Base):
                 do_sample=use_nucleus_sampling,
                 top_p=top_p,
                 temperature=temperature,
-                num_beams=num_beams,
+                num_beams=1,
                 max_length=max_length,
                 min_length=min_length,
-                # eos_token_id=self.eos_token_id,
+                output_hidden_states=True,
+                return_dict_in_generate=True,
                 repetition_penalty=repetition_penalty,
                 length_penalty=length_penalty,
                 num_return_sequences=num_captions,
             )
-
+        llm_hidden_states = outputs.hidden_states
+        # llm_hidden_states = tuple((inner_tuple[-2], inner_tuple[-1]) for inner_tuple in llm_hidden_states)
+        last_tensors_list = [inner_tuple[-1] for inner_tuple in llm_hidden_states[1:]]
+        second_last_tensors_list = [inner_tuple[-2] for inner_tuple in
+                                    llm_hidden_states[1:]]
+        last_LLM_states = torch.stack(last_tensors_list, dim=0).unsqueeze(0).squeeze(2).squeeze(2)
+        second_last_LLM_states = torch.stack(second_last_tensors_list, dim=0).unsqueeze(0).squeeze(2).squeeze(2)
+        outputs = outputs.sequences
         outputs[outputs == 0] = 2 # convert output id 0 to 2 (eos_token_id)
         output_text = self.llm_tokenizer.batch_decode(outputs, skip_special_tokens=True)
         output_text = [text.strip() for text in output_text]
 
-        return output_text
+        return output_text, query_output.last_hidden_state, query_output.second_last_hidden_state, last_LLM_states, second_last_LLM_states
 
     def predict_answers(
         self,

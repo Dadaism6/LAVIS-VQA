@@ -36,7 +36,32 @@ from transformers.models.llama.configuration_llama import LlamaConfig
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "LlamaConfig"
+from transformers.utils import ModelOutput
+from dataclasses import dataclass
+@dataclass
+class BaseModelOutputWithPast_Last2(ModelOutput):
+    """
+    Adapt from transformer.modeling_outputs: BaseModelOutputWithPast
+    """
 
+    last_hidden_state: torch.FloatTensor = None
+    second_last_hidden_state: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+@dataclass
+class CausalLMOutputWithPast_Last2(ModelOutput):
+    """
+    Adapt from transformer.modeling_outputs: BaseModelOutputWithPast
+    """
+
+    loss: Optional[torch.FloatTensor] = None
+    logits: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    last_hidden_state: Optional[torch.FloatTensor] = None
+    second_last_hidden_state: Optional[torch.FloatTensor] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 # Copied from transformers.models.bart.modeling_bart._make_causal_mask
 def _make_causal_mask(
@@ -491,7 +516,7 @@ class LlamaModel(LlamaPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple, BaseModelOutputWithPast]:
+    ) -> Union[Tuple, BaseModelOutputWithPast_Last2]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -550,10 +575,12 @@ class LlamaModel(LlamaPreTrainedModel):
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
         next_decoder_cache = () if use_cache else None
-
+        second_last_hidden_state = None
         for idx, decoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 all_hidden_states += (hidden_states,)
+            if idx == len(self.layers) - 1:
+                second_last_hidden_state = hidden_states
 
             past_key_value = past_key_values[idx] if past_key_values is not None else None
 
@@ -600,8 +627,9 @@ class LlamaModel(LlamaPreTrainedModel):
         next_cache = next_decoder_cache if use_cache else None
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
-        return BaseModelOutputWithPast(
+        return BaseModelOutputWithPast_Last2(
             last_hidden_state=hidden_states,
+            second_last_hidden_state=second_last_hidden_state,
             past_key_values=next_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attns,
@@ -720,11 +748,13 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
 
-        return CausalLMOutputWithPast(
+        return CausalLMOutputWithPast_Last2(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
+            last_hidden_state=outputs.last_hidden_state,
+            second_last_hidden_state=outputs.second_last_hidden_state,
             attentions=outputs.attentions,
         )
 

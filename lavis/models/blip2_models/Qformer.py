@@ -46,8 +46,31 @@ from transformers.utils import logging
 from transformers.models.bert.configuration_bert import BertConfig
 
 logger = logging.get_logger(__name__)
+@dataclass
+class BaseModelOutputWithPastAndCrossAttentions_Last2Hidden(ModelOutput):
+    """
+    Adapt from transformers.modeling_outputs.BaseModelOutputWithPastAndCrossAttentions
+    """
 
+    last_hidden_state: torch.FloatTensor = None
+    second_last_hidden_state: torch.FloatTensor = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    cross_attentions: Optional[Tuple[torch.FloatTensor]] = None
+@dataclass
+class BaseModelOutputWithPoolingAndCrossAttentions_Last2Hidden(ModelOutput):
+    """
+    Adapt from transformers.modeling_outputs.BaseModelOutputWithPastAndCrossAttentions
+    """
 
+    last_hidden_state: torch.FloatTensor = None
+    second_last_hidden_state: torch.FloatTensor = None
+    pooler_output: torch.FloatTensor = None
+    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
+    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    cross_attentions: Optional[Tuple[torch.FloatTensor]] = None
 class BertEmbeddings(nn.Module):
     """Construct the embeddings from word and position embeddings."""
 
@@ -511,13 +534,15 @@ class BertEncoder(nn.Module):
         all_cross_attentions = (
             () if output_attentions and self.config.add_cross_attention else None
         )
-
+        second_last_hidden_states = None
         next_decoder_cache = () if use_cache else None
 
         for i in range(self.config.num_hidden_layers):
             layer_module = self.layer[i]
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
+            if i == self.config.num_hidden_layers-1:
+                second_last_hidden_states = hidden_states
 
             layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
@@ -580,8 +605,9 @@ class BertEncoder(nn.Module):
                 ]
                 if v is not None
             )
-        return BaseModelOutputWithPastAndCrossAttentions(
+        return BaseModelOutputWithPastAndCrossAttentions_Last2Hidden(
             last_hidden_state=hidden_states,
+            second_last_hidden_state=second_last_hidden_states,
             past_key_values=next_decoder_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
@@ -955,8 +981,9 @@ class BertModel(BertPreTrainedModel):
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
 
-        return BaseModelOutputWithPoolingAndCrossAttentions(
+        return BaseModelOutputWithPoolingAndCrossAttentions_Last2Hidden(
             last_hidden_state=sequence_output,
+            second_last_hidden_state=encoder_outputs.second_last_hidden_state,
             pooler_output=pooled_output,
             past_key_values=encoder_outputs.past_key_values,
             hidden_states=encoder_outputs.hidden_states,
