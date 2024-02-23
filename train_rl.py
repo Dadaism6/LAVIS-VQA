@@ -1,6 +1,7 @@
 import argparse
 import os
 import os.path as osp
+import torch
 
 from metadrive import MetaDriveEnv
 from metadrive.component.sensors.rgb_camera import RGBCamera
@@ -12,9 +13,8 @@ from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 
 from utils import get_time_str
 from wandb_callback import WandbCallback
-
-baseline_eval_config = dict(manual_control=False, use_render=False, main_exp=False, start_seed=1000, horizon=1500)
-baseline_train_config = dict(manual_control=False, use_render=False, main_exp=False, horizon=1500)
+from vlm_extractor import CustomVLMFeatureExtractor
+baseline_eval_config = dict(manual_control=False, use_render=False, start_seed=1000, horizon=1500)
 
 def make_eval_env(log_dir):
     def _init():
@@ -26,15 +26,21 @@ def make_eval_env(log_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exp-name", default="initial_test", type=str, help="The experiment name.")
+    parser.add_argument("--exp-name", default="vlm_rl_initial_test", type=str, help="The experiment name.")
     parser.add_argument("--wandb", action="store_true", help="Set to True to upload stats to wandb.")
     parser.add_argument("--seed", default=0, type=int, help="The random seed.")
+    parser.add_argument("--device", default="cuda:2", type=str, help="The CUDA Device")
+    parser.add_argument("--feature-dim", default=128, type=int, help="The feature dim used for RL")
+    parser.add_argument("--num-transformer-layer", default=4, type=int, help="The #layer of transformer")
     args = parser.parse_args()
 
     # ===== Setup some meta information =====
     exp_name = args.exp_name
     seed = int(args.seed)
     use_wandb = args.wandb
+    device = torch.device(args.device)
+    feature_dim = args.feature_dim
+    num_transformer_layer = args.num_transformer_layer
     if not use_wandb:
         print("[WARNING] Please note that you are not using wandb right now!!!")
 
@@ -50,31 +56,42 @@ if __name__ == '__main__':
     # ===== Setup the config =====
     config = dict(
         # Environment config
-        env_config=dict(image_observation=True,
-         vehicle_config=dict(image_source="rgb_camera"),
-         sensors={"rgb_camera": (RGBCamera, (200,100))},
-         stack_size=3,
-         agent_policy=IDMPolicy # drive with IDM policy
+        env_config = dict(
+            use_render=False,
+            start_seed=0,
+            num_scenarios=400,
+            image_on_cuda=False,
+            traffic_density=0.2,
+            image_observation=True,
+            sensors={
+                "rgb_camera": (RGBCamera, 256, 256),
+            },
+            agent_policy=IDMPolicy,
+            interface_panel=[],
+            vehicle_config={
+                "image_source": "rgb_camera",
+            },
         ),
 
         # Algorithm config
         algo=dict(
             policy="MlpPolicy",
-            policy_kwargs=dict(net_arch=[128]),
+            policy_kwargs=dict(net_arch=[128],
+                               features_extractor_class=CustomVLMFeatureExtractor,
+                               features_extractor_kwargs=dict(features_dim=feature_dim,
+                                                              num_transformer_layer=num_transformer_layer,
+                                                              device = device),
+                               ),
             env=None,
             # TODO: Change learning rate
             learning_rate=1e-4,
-            optimize_memory_usage=True,
 
-            learning_starts=10000,  ###
-            batch_size=100,  # Reduce the batch size for real-time copilot
-            tau=0.005,
+            batch_size=64,  # Reduce the batch size for real-time copilot
             gamma=0.99,
             tensorboard_log=log_dir,
-            create_eval_env=False,
             verbose=2,
             seed=seed,
-            device="auto",
+            device = device,
         ),
 
         # Meta data
@@ -87,7 +104,16 @@ if __name__ == '__main__':
         log_dir=log_dir
     )
 
-    # ===== Setup the training environment =====
+    # Need this for rendering on server
+    env = MetaDriveEnv({"use_render": False, "image_observation": False})
+    try:
+        env.reset()
+        for i in range(1, 100):
+            o, r, tm, tc, info = env.step([0, 1])
+    finally:
+        env.close()
+
+    # ===== Setup the training environment =====k
     train_env = MetaDriveEnv(config=config["env_config"], )
     eval_env = SubprocVecEnv([make_eval_env(log_dir)])
     train_env = Monitor(env=train_env, filename=log_dir)
@@ -109,6 +135,7 @@ if __name__ == '__main__':
                 trial_name=trial_name,
                 exp_name=exp_name,
                 project_name=project_name,
+                team_name=team_name,
                 config=config
             )
         )
@@ -125,10 +152,10 @@ if __name__ == '__main__':
         reset_num_timesteps=True,
 
         # eval
-        eval_env=eval_env,
-        eval_freq=5000,
-        n_eval_episodes=30,
-        eval_log_path=log_dir,
+        # eval_env=eval_env,
+        # eval_freq=5000,
+        # n_eval_episodes=30,
+        # eval_log_path=log_dir,
 
         # logging
         tb_log_name=exp_name,  # Should place the algorithm name here!

@@ -13,6 +13,7 @@ from lavis.processors.randaugment import RandomAugment
 from omegaconf import OmegaConf
 from torchvision import transforms
 from torchvision.transforms.functional import InterpolationMode
+import torch.nn.functional as F
 
 
 class BlipImageBaseProcessor(BaseProcessor):
@@ -177,7 +178,19 @@ class BlipImageEvalProcessor(BlipImageBaseProcessor):
                 self.normalize,
             ]
         )
-
+    #     self.image_size = image_size
+    #     if mean is None:
+    #         mean = (0.48145466, 0.4578275, 0.40821073)
+    #     if std is None:
+    #         std = (0.26862954, 0.26130258, 0.27577711)
+    #     self.normalize = transforms.Normalize(mean=mean, std=std)
+    # def transform(self, image_tensor):
+    #     if image_tensor.shape[-1] == 3:  # Assuming 3 channels (RGB)
+    #         image_tensor = image_tensor.permute(0, 3, 1, 2)
+    #     image_resized = F.interpolate(image_tensor, size=(self.image_size, self.image_size),
+    #                                   mode='bicubic', align_corners=False)
+    #     image_normalized = self.normalize(image_resized)
+    #     return image_normalized
     def __call__(self, item):
         return self.transform(item)
 

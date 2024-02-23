@@ -1,18 +1,23 @@
 import torch
 import torch.nn as nn
+import time
 from PIL import Image
 from lavis.models import load_model_and_preprocess
 # setup device to use
-device = torch.device("cuda:3") if torch.cuda.is_available() else "cpu"
+device = torch.device("cuda:2") if torch.cuda.is_available() else "cpu"
 # load sample image
 raw_image = Image.open("/home/chenda/metadrive.jpg").convert("RGB")
-
+raw_image = [raw_image] * 10
+start_time_load_model = time.time()
 model, vis_processors, _ = load_model_and_preprocess(name="blip2_vicuna_instruct", model_type="vicuna7b", is_eval=True, device=device)
-
+end_time_load_model = time.time()
+print(f"====Load Model took {end_time_load_model-start_time_load_model} seconds to complete.")
 image = vis_processors["eval"](raw_image).unsqueeze(0).to(device)
-
+start_time_multimodal = time.time()
 result, last_vision_embedding, second_last_vision_embedding, last_llm_embedding, second_last_llm_embedding = (
     model.generate({"image": image, "prompt": "Imaging you are the driver, can you safely drive straightforward? Please Explain."}))
+end_time_multimodal = time.time()
+print(f"====Multimodal Feature Extraction took {end_time_multimodal-start_time_multimodal} seconds to complete.")
 print(result)
 class CustomTransformerModel(nn.Module):
     def __init__(self):

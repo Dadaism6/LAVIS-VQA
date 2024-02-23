@@ -189,7 +189,7 @@ class WandbCallback(BaseCallback):
             exp_name,
             project_name,
             config=None,
-            team_name="drivingforce",
+            team_name="chenda_playground",
             verbose: int = 0,
             model_save_path: str = None,
             model_save_freq: int = 0,
@@ -198,12 +198,7 @@ class WandbCallback(BaseCallback):
 
         # PZH: Setup our key
         WANDB_ENV_VAR = "WANDB_API_KEY"
-        key_file_path = get_api_key_file(None)  # Search ~/wandb_api_key_file.txt first, then use PZH's
-        with open(key_file_path, "r") as f:
-            key = f.readline()
-        key = key.replace("\n", "")
-        key = key.replace(" ", "")
-        os.environ[WANDB_ENV_VAR] = key
+        os.environ[WANDB_ENV_VAR] = "6048623673469aa435e5c18e4c00a653edc76a5c"
 
         self.run = wandb.init(
             id=trial_name,

@@ -13,9 +13,18 @@ from lavis.datasets.datasets.coco_vqa_datasets import COCOVQADataset, COCOVQAEva
 from lavis.datasets.datasets.vg_vqa_datasets import VGVQADataset, VGVQAInstructDataset
 from lavis.datasets.datasets.gqa_datasets import GQADataset, GQAEvalDataset, GQAInstructDataset
 from lavis.datasets.datasets.iconqa_datasets import IconQADataset, IconQAEvalDataset, IconQAInstructDataset
+from lavis.datasets.datasets.nuscenes_vqa_datasets import NuScenesVQADataset, NuScenesVQAEvalDataset
 from lavis.datasets.datasets.ocr_datasets import OCRVQADataset, OCRVQAInstructDataset
 from lavis.datasets.datasets.vizwiz_vqa_datasets import VizWizEvalDataset
+@registry.register_builder("nuscenes_vqa")
+class NuScenesVQABuilder(BaseDatasetBuilder):
+    train_dataset_cls = NuScenesVQADataset
+    eval_dataset_cls = NuScenesVQAEvalDataset
 
+    DATASET_CONFIG_DICT = {
+        "default": "configs/datasets/nuscenes/defaults_vqa.yaml",
+        "eval": "configs/datasets/nuscenes/eval_vqa.yaml",
+    }
 @registry.register_builder("coco_vqa")
 class COCOVQABuilder(BaseDatasetBuilder):
     train_dataset_cls = COCOVQADataset
